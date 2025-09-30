@@ -6,7 +6,6 @@ import joblib
 import plotly.express as px
 import seaborn as sns
 import matplotlib.pyplot as plt
-import os
 
 st.set_page_config(page_title="Customer Segmentation Dashboard", layout="wide")
 
@@ -38,6 +37,16 @@ st.markdown(f"""
         transform: scale(1.05);
         background-color: #9370DB;
     }}
+    .stMetric {{
+        border-radius: 15px;
+        padding: 10px;
+        background: linear-gradient(to right, #8ec5fc, #e0c3fc);
+        box-shadow: 3px 3px 10px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+    }}
+    .stMetric:hover {{
+        transform: scale(1.05);
+    }}
     h1 {{
         text-align: center;
         font-family: 'Arial Black', sans-serif;
@@ -58,15 +67,9 @@ num_customers = st.sidebar.slider("Number of Customers for Random Dataset:", 50,
 num_clusters = st.sidebar.slider("Number of clusters in random dataset:", 2, 6, 3)
 generate_random = st.sidebar.button("🎲 Generate Random Dataset")
 
-# ------------------------------
-# Load scaler and model using relative paths
-# ------------------------------
-BASE_DIR = os.path.dirname(__file__)
-scaler_path = os.path.join(BASE_DIR, "scaler_customer.pkl")
-kmeans_path = os.path.join(BASE_DIR, "kmeans_customer_model.pkl")
-
-scaler = joblib.load(scaler_path)
-kmeans = joblib.load(kmeans_path)
+# Load scaler and model
+scaler = joblib.load("scaler_customer.pkl")
+kmeans = joblib.load("kmeans_customer_model.pkl")
 
 # ------------------------------
 # Function to process and visualize dataset
@@ -90,20 +93,24 @@ def process_and_visualize(df, random_generated=False):
     X_scaled = scaler.transform(X)
     customer_df['Cluster'] = kmeans.predict(X_scaled)
 
+    # ------------------------------
     # Cluster Filter
     clusters = sorted(customer_df['Cluster'].unique())
     selected_clusters = st.sidebar.multiselect("Filter Clusters to Display", options=clusters, default=clusters)
     filtered_df = customer_df[customer_df['Cluster'].isin(selected_clusters)]
 
+    # ------------------------------
     # Metrics
     col1, col2, col3 = st.columns(3)
     col1.metric("Total Customers", filtered_df.shape[0])
     col2.metric("Total Spend", f"${filtered_df['TotalSpend'].sum():,.2f}")
     col3.metric("Avg Purchases/Customer", f"{filtered_df['NumPurchases'].mean():.1f}")
 
+    # ------------------------------
     # Tabs for visualization
     tabs = st.tabs(["📄 Raw Data", "📉 2D Visualization", "🌀 3D Cluster", "🗂 Cluster Summary", "⚖️ Compare Clusters"])
 
+    # Raw Data
     with tabs[0]:
         st.subheader("Customer-Level Data")
         st.dataframe(filtered_df.head())
@@ -113,6 +120,7 @@ def process_and_visualize(df, random_generated=False):
             csv_random = df.to_csv(index=False).encode('utf-8')
             st.download_button("💾 Download Random Dataset", data=csv_random, file_name='random_customer_dataset.csv', mime='text/csv')
 
+    # 2D Scatter
     with tabs[1]:
         st.subheader("2D Cluster Visualization")
         fig, ax = plt.subplots(figsize=(8,5))
@@ -121,6 +129,7 @@ def process_and_visualize(df, random_generated=False):
         ax.set_title("Customer Segments (TotalSpend vs TotalQuantity)")
         st.pyplot(fig)
 
+    # 3D Scatter
     with tabs[2]:
         st.subheader("3D Cluster Visualization")
         fig = px.scatter_3d(
@@ -133,15 +142,17 @@ def process_and_visualize(df, random_generated=False):
             hover_data={'CustomerID': True, 'NumPurchases': True, 'TotalQuantity': True, 'TotalSpend': True, 'Cluster': True},
             color_continuous_scale=px.colors.qualitative.Set2
         )
-        fig.update_layout(width=900, height=700, template="plotly_dark" if dark_mode else "plotly_white")
+        fig.update_layout(width=900, height=700, template=plot_template)
         st.plotly_chart(fig)
 
+    # Cluster Summary
     with tabs[3]:
         st.subheader("Cluster Summary")
         cluster_summary = filtered_df.groupby('Cluster')[['NumPurchases','TotalQuantity','TotalSpend']].mean().round(2)
         cluster_summary['CustomerCount'] = filtered_df['Cluster'].value_counts().sort_index().values
         st.dataframe(cluster_summary)
 
+    # Compare Two Clusters
     with tabs[4]:
         st.subheader("Compare Two Clusters Side by Side")
         if len(clusters) >= 2:
@@ -163,7 +174,7 @@ def process_and_visualize(df, random_generated=False):
                 st.metric("Avg Purchases/Customer", f"{compare_df1['NumPurchases'].mean():.1f}")
                 fig1 = px.scatter_3d(compare_df1, x='NumPurchases', y='TotalQuantity', z='TotalSpend', 
                                      color='Cluster', size='TotalSpend', color_continuous_scale=px.colors.qualitative.Set2)
-                fig1.update_layout(width=450, height=450, template="plotly_dark" if dark_mode else "plotly_white")
+                fig1.update_layout(width=450, height=450, template=plot_template)
                 st.plotly_chart(fig1)
 
             with col2:
@@ -173,7 +184,7 @@ def process_and_visualize(df, random_generated=False):
                 st.metric("Avg Purchases/Customer", f"{compare_df2['NumPurchases'].mean():.1f}")
                 fig2 = px.scatter_3d(compare_df2, x='NumPurchases', y='TotalQuantity', z='TotalSpend', 
                                      color='Cluster', size='TotalSpend', color_continuous_scale=px.colors.qualitative.Set2)
-                fig2.update_layout(width=450, height=450, template="plotly_dark" if dark_mode else "plotly_white")
+                fig2.update_layout(width=450, height=450, template=plot_template)
                 st.plotly_chart(fig2)
         else:
             st.info("At least 2 clusters needed for comparison.")
@@ -207,6 +218,7 @@ elif generate_random:
 
     data = np.vstack(data)
 
+    # Handle remaining customers
     if data.shape[0] < num_customers:
         extra = num_customers - data.shape[0]
         invoice = np.random.randint(1, 50, size=extra)
@@ -222,4 +234,5 @@ elif generate_random:
 
 else:
     st.warning("Please upload a dataset or click 'Generate Random Dataset' in the sidebar to proceed.")
+
 
